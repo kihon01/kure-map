@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>くれまちWi-Fi利用者マップ</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', Meiryo, sans-serif;
+        }
+        
+        #map-container {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            max-width: 320px;
+            z-index: 1000;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .info-panel h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #333;
+        }
+        
+        .info-panel p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .ranking-section {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 2px solid #f0f0f0;
+        }
+        
+        .ranking-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .ranking-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 5px;
+            background: #f9f9f9;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .ranking-item:hover {
+            background: #e8f5e9;
+            transform: translateX(5px);
+        }
+        
+        .ranking-number {
+            font-size: 18px;
+            font-weight: bold;
+            width: 30px;
+            text-align: center;
+        }
+        
+        .ranking-number.gold { color: #FFD700; }
+        .ranking-number.silver { color: #C0C0C0; }
+        .ranking-number.bronze { color: #CD7F32; }
+        
+        .ranking-content {
+            flex: 1;
+            margin-left: 10px;
+        }
+        
+        .ranking-name {
+            font-size: 13px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 2px;
+        }
+        
+        .ranking-users {
+            font-size: 16px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        
+        .custom-marker {
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 10px;
+            cursor: pointer;
+        }
+        
+        .leaflet-popup-content-wrapper {
+            font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', Meiryo, sans-serif;
+        }
+        
+        .marker-popup h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #333;
+        }
+        
+        .marker-popup p {
+            margin: 5px 0;
+            font-size: 13px;
+            color: #666;
+        }
+        
+        .marker-popup .users {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4CAF50;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="map-container">
+        <div class="info-panel">
+            <h2>くれまちWi-Fi利用者マップ</h2>
+            <p>📅 2025年10月1日</p>
+            <p>📍 23地点</p>
+            <p>👥 総利用者数: <span id="total-users">-</span>人</p>
+            
+            <div class="ranking-section">
+                <div class="ranking-title">🏆 利用者数ランキング TOP10</div>
+                <div id="ranking-list"></div>
+            </div>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <script>
+        // APIレスポンスデータ
+        const wifiData = {
+            "2025/10/01": [
+                {
+                    "Wifi名": "阿賀まちづくりセンター",
+                    "設置場所住所": "呉市阿賀中央６丁目２番16号",
+                    "緯度": "34.23649991",
+                    "経度": "132.6009397",
+                    "利用者数": "71"
+                },
+                {
+                    "Wifi名": "川尻まちづくりセンター",
+                    "設置場所住所": "呉市川尻町東１丁目１番21号",
+                    "緯度": "34.23539049",
+                    "経度": "132.6964576",
+                    "利用者数": "64"
+                },
+                {
+                    "Wifi名": "宮原まちづくりセンター",
+                    "設置場所住所": "呉市宮原７丁目４番21号",
+                    "緯度": "34.22986723",
+                    "経度": "132.5596993",
+                    "利用者数": "50"
+                },
+                {
+                    "Wifi名": "安浦まちづくりセンター",
+                    "設置場所住所": "呉市安浦町中央４丁目３番２号",
+                    "緯度": "34.28147076",
+                    "経度": "132.7441768",
+                    "利用者数": "173"
+                },
+                {
+                    "Wifi名": "豊浜まちづくりセンター",
+                    "設置場所住所": "呉市豊浜町大字豊島3526番地の15",
+                    "緯度": "34.17632249",
+                    "経度": "132.7987542",
+                    "利用者数": "40"
+                },
+                {
+                    "Wifi名": "昭和まちづくりセンター",
+                    "設置場所住所": "呉市焼山中央２丁目８番12号",
+                    "緯度": "34.29673626",
+                    "経度": "132.5576218",
+                    "利用者数": "25"
+                },
+                {
+                    "Wifi名": "豊まちづくりセンター",
+                    "設置場所住所": "呉市豊町大長字堂の尻5915番地３",
+                    "緯度": "34.18315233",
+                    "経度": "132.8574754",
+                    "利用者数": "25"
+                },
+                {
+                    "Wifi名": "昭和東まちづくりセンター",
+                    "設置場所住所": "呉市苗代町字八幡野39番地の２",
+                    "緯度": "34.29045852",
+                    "経度": "132.5910808",
+                    "利用者数": "11"
+                },
+                {
+                    "Wifi名": "郷原まちづくりセンター",
+                    "設置場所住所": "呉市郷原町1585番地の８",
+                    "緯度": "34.30000346",
+                    "経度": "132.636531",
+                    "利用者数": "43"
+                },
+                {
+                    "Wifi名": "警固屋まちづくりセンター",
+                    "設置場所住所": "呉市警固屋２丁目222番地",
+                    "緯度": "34.21335565",
+                    "経度": "132.544296",
+                    "利用者数": "74"
+                },
+                {
+                    "Wifi名": "仁方まちづくりセンター",
+                    "設置場所住所": "呉市仁方本町１丁目６番11号",
+                    "緯度": "34.22393366",
+                    "経度": "132.6525748",
+                    "利用者数": "41"
+                },
+                {
+                    "Wifi名": "豊浜まちづくりセンター豊島文館",
+                    "設置場所住所": "呉市豊浜町大字豊島3959番地の１",
+                    "緯度": "34.17381534",
+                    "経度": "132.7972647",
+                    "利用者数": "2"
+                },
+                {
+                    "Wifi名": "吉浦まちづくりセンター",
+                    "設置場所住所": "呉市吉浦東本町１丁目７番23号",
+                    "緯度": "34.25778813",
+                    "経度": "132.529767",
+                    "利用者数": "82"
+                },
+                {
+                    "Wifi名": "広まちづくりセンター",
+                    "設置場所住所": "呉市広古新開２丁目１番３号",
+                    "緯度": "34.23270029",
+                    "経度": "132.615228",
+                    "利用者数": "76"
+                },
+                {
+                    "Wifi名": "つばき会館（生涯学習センター）",
+                    "設置場所住所": "呉市中央６丁目２番９号",
+                    "緯度": "34.25014081",
+                    "経度": "132.5665595",
+                    "利用者数": "142"
+                },
+                {
+                    "Wifi名": "呉市役所",
+                    "設置場所住所": "呉市中央４丁目１番６号",
+                    "緯度": "34.24881375",
+                    "経度": "132.5655759",
+                    "利用者数": "295"
+                },
+                {
+                    "Wifi名": "天応まちづくりセンター",
+                    "設置場所住所": "呉市天応宮町４番15号",
+                    "緯度": "34.28730561",
+                    "経度": "132.5179573",
+                    "利用者数": "155"
+                },
+                {
+                    "Wifi名": "倉橋まちづくりセンター",
+                    "設置場所住所": "呉市倉橋町字前宮の浦431番地",
+                    "緯度": "34.10204849",
+                    "経度": "132.5123973",
+                    "利用者数": "134"
+                },
+                {
+                    "Wifi名": "倉橋まちづくりセンター 釣士田分館",
+                    "設置場所住所": "呉市倉橋町字大坪7529番地",
+                    "緯度": "34.14603753",
+                    "経度": "132.5104021",
+                    "利用者数": "45"
+                },
+                {
+                    "Wifi名": "蒲刈まちづくりセンター",
+                    "設置場所住所": "呉市蒲刈町向1112番地29",
+                    "緯度": "34.18757302",
+                    "経度": "132.688376",
+                    "利用者数": "48"
+                },
+                {
+                    "Wifi名": "下蒲刈まちづくりセンター",
+                    "設置場所住所": "呉市下蒲刈町下島1730番地",
+                    "緯度": "34.191745546485436",
+                    "経度": "132.67478033365302",
+                    "利用者数": "8"
+                },
+                {
+                    "Wifi名": "二川まちづくりセンター",
+                    "設置場所住所": "呉市築地町３番１号",
+                    "緯度": "34.24462166",
+                    "経度": "132.5455269",
+                    "利用者数": "29"
+                },
+                {
+                    "Wifi名": "音戸まちづくりセンター",
+                    "設置場所住所": "呉市音戸町南隠渡１丁目７番１号",
+                    "緯度": "34.1879353",
+                    "経度": "132.5343026",
+                    "利用者数": "27"
+                }
+            ]
+        };
+
+        // 地図の初期化
+        const map = L.map('map').setView([34.25, 132.6], 11);
+
+        // OpenStreetMapタイルレイヤーを追加
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        const locations = wifiData["2025/10/01"];
+        let totalUsers = 0;
+        const markers = {}; // マーカーを保存するオブジェクト
+
+        // 利用者数でソート
+        const sortedLocations = [...locations].sort((a, b) => parseInt(b.利用者数) - parseInt(a.利用者数));
+
+        // ランキングリストを生成
+        const rankingList = document.getElementById('ranking-list');
+        sortedLocations.slice(0, 10).forEach((location, index) => {
+            const rankNumber = index + 1;
+            let medalClass = '';
+            let medal = rankNumber;
+            
+            if (rankNumber === 1) {
+                medalClass = 'gold';
+                medal = '🥇';
+            } else if (rankNumber === 2) {
+                medalClass = 'silver';
+                medal = '🥈';
+            } else if (rankNumber === 3) {
+                medalClass = 'bronze';
+                medal = '🥉';
+            }
+
+            const rankItem = document.createElement('div');
+            rankItem.className = 'ranking-item';
+            rankItem.innerHTML = `
+                <div class="ranking-number ${medalClass}">${medal}</div>
+                <div class="ranking-content">
+                    <div class="ranking-name">${location.Wifi名}</div>
+                    <div class="ranking-users">${parseInt(location.利用者数).toLocaleString()}人</div>
+                </div>
+            `;
+            
+            // クリックで地図上のマーカーに移動
+            rankItem.addEventListener('click', () => {
+                const lat = parseFloat(location.緯度);
+                const lng = parseFloat(location.経度);
+                map.setView([lat, lng], 15);
+                
+                // マーカーのポップアップを開く
+                if (markers[location.Wifi名]) {
+                    markers[location.Wifi名].openPopup();
+                }
+            });
+            
+            rankingList.appendChild(rankItem);
+        });
+
+        // マーカーを追加
+        locations.forEach(function(location) {
+            const users = parseInt(location.利用者数);
+            totalUsers += users;
+
+            // マーカーのサイズを利用者数に応じて変更
+            const markerSize = Math.max(20, Math.min(50, users / 5));
+            
+            // マーカーの色を利用者数に応じて変更
+            let color = '#4CAF50'; // 緑
+            if (users > 150) color = '#F44336'; // 赤
+            else if (users > 100) color = '#FF9800'; // オレンジ
+            else if (users > 50) color = '#FFC107'; // 黄色
+
+            // ポップアップの内容を作成
+            const popupContent = `
+                <div class="marker-popup">
+                    <h3>📶 ${location.Wifi名}</h3>
+                    <p>📍 ${location.設置場所住所}</p>
+                    <div class="users">${location.利用者数}人</div>
+                    <p style="font-size: 11px; color: #999;">2025年10月1日時点</p>
+                </div>
+            `;
+
+            // カスタムアイコンを作成
+            const customIcon = L.divIcon({
+                className: 'custom-div-icon',
+                html: `<div class="custom-marker" style="width: ${markerSize}px; height: ${markerSize}px; background-color: ${color};">${users}</div>`,
+                iconSize: [markerSize, markerSize],
+                iconAnchor: [markerSize / 2, markerSize / 2],
+                popupAnchor: [0, -markerSize / 2]
+            });
+
+            // マーカーを追加
+            const marker = L.marker([parseFloat(location.緯度), parseFloat(location.経度)], { icon: customIcon })
+                .addTo(map)
+                .bindPopup(popupContent);
+            
+            // マーカーを保存（ランキングからアクセスできるように）
+            markers[location.Wifi名] = marker;
+        });
+
+        // 総利用者数を表示
+        document.getElementById('total-users').textContent = totalUsers.toLocaleString();
+    </script>
+</body>
+</html>
